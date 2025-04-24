@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Missile Control Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: #1a1a1a;
+            overflow: hidden;
+        }
+
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        #score-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #4caf50;
+        }
+
+        #lives-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 24px;
+            color: #ff5722;
+        }
+
+        #game-over-screen, #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.8);
+            pointer-events: auto;
+        }
+
+        #game-over-screen {
+            display: none;
+        }
+
+        .screen-title {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #4caf50;
+        }
+
+        .screen-subtitle {
+            font-size: 24px;
+            margin-bottom: 40px;
+            color: #ffffff;
+        }
+
+        .screen-button {
+            padding: 15px 30px;
+            font-size: 20px;
+            background-color: #4caf50;
+            color: #ffffff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            pointer-events: auto;
+        }
+
+        .screen-button:hover {
+            background-color: #3d8b40;
+        }
+
+        .controls-info {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 16px;
+            color: #aaaaaa;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+
+        <div id="ui-container">
+            <div id="score-display">Score: 0</div>
+            <div id="lives-display">Lives: 3</div>
+
+            <div id="start-screen">
+                <h1 class="screen-title">Missile Control</h1>
+                <p class="screen-subtitle">Guide missiles to their targets!</p>
+                <button class="screen-button" id="start-button">Start Game</button>
+                <div class="controls-info">
+                    Controls: Click and drag to guide missiles
+                </div>
+            </div>
+
+            <div id="game-over-screen">
+                <h1 class="screen-title">Game Over</h1>
+                <p class="screen-subtitle">Your final score: <span id="final-score">0</span></p>
+                <button class="screen-button" id="restart-button">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game variables
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+        const scoreDisplay = document.getElementById('score-display');
+        const livesDisplay = document.getElementById('lives-display');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        // Set canvas size
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Game state
+        let gameRunning = false;
+        let score = 0;
+        let lives = 3;
+        let missiles = [];
+        let targets = [];
+        let obstacles = [];
+        let lastTime = 0;
+        let missileSpawnTimer = 0;
+        let targetSpawnTimer = 0;
+
+        // Mouse interaction variables
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let dragEndX = 0;
+        let dragEndY = 0;
+
+        // Initialize game
+        function initGame() {
+            gameRunning = true;
+            score = 0;
+            lives = 3;
+            missiles = [];
+            targets = [];
+            obstacles = [];
+
+            updateScoreDisplay();
+            updateLivesDisplay();
+
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+
+            // Create initial obstacles
+            createObstacles();
+
+            // Start game loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Game loop
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            // Update game state
+            updateGame(deltaTime);
+
+            // Render game
+            renderGame();
+
+            // Continue game loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Update game state
+        function updateGame(deltaTime) {
+            // Spawn new missiles
+            missileSpawnTimer += deltaTime;
+            if (missileSpawnTimer > 2000) {
+                spawnMissile();
+                missileSpawnTimer = 0;
+            }
+
+            // Spawn new targets
+            targetSpawnTimer += deltaTime;
+            if (targetSpawnTimer > 5000) {
+                spawnTarget();
+                targetSpawnTimer = 0;
+            }
+
+            // Update missiles
+            for (let i = missiles.length - 1; i >= 0; i--) {
+                const missile = missiles[i];
+
+                // Update missile position based on drag direction
+                if (isDragging && missile) {
+                    // Calculate direction vector
+                    const dirX = dragEndX - dragStartX;
+                    const dirY = dragEndY - dragStartY;
+                    const length = Math.sqrt(dirX * dirX + dirY * dirY);
+
+                    if (length > 0) {
+                        const normalizedDirX = dirX / length;
+                        const normalizedDirY = dirY / length;
+
+                        // Move missile in the direction of drag
+                        missile.x += normalizedDirX * (missile.speed * deltaTime / 1000);
+                        missile.y += normalizedDirY * (missile.speed * deltaTime / 1000);
+                    }
+                }
+
+                // Check for collision with obstacles
+                for (const obstacle of obstacles) {
+                    if (checkCollision(missile, obstacle)) {
+                        missiles.splice(i, 1);
+                        break;
+                    }
+                }
+
+                // Check for collision with target
+                for (let j = targets.length - 1; j >= 0; j--) {
+                    const target = targets[j];
+                    if (checkCollision(missile, target)) {
+                        // Increase score
+                        score += 10;
+                        updateScoreDisplay();
+
+                        // Remove missile and target
+                        missiles.splice(i, 1);
+                        targets.splice(j, 1);
+
+                        // Create a new obstacle
+                        if (Math.random() < 0.3) {
+                            createObstacle();
+                        }
+
+                        break;
+                    }
+                }
+
+                // Remove missiles that go off screen
+                if (missile.x < 0 || missile.x > canvas.width || missile.y < 0 || missile.y > canvas.height) {
+                    missiles.splice(i, 1);
+                }
+            }
+
+            // Update targets
+            for (let i = targets.length - 1; i >= 0; i--) {
+                const target = targets[i];
+
+                // Move target towards its destination
+                const dx = target.destinationX - target.x;
+                const dy = target.destinationY - target.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance > target.speed) {
+                    target.x += (dx / distance) * target.speed;
+                    target.y += (dy / distance) * target.speed;
+                } else {
+                    // Target reached destination
+                    targets.splice(i, 1);
+                }
+            }
+        }
+
+        // Render game
+        function renderGame() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw background grid
+            drawGrid();
+
+            // Draw obstacles
+            for (const obstacle of obstacles) {
+                drawObstacle(obstacle);
+            }
+
+            // Draw targets
+            for (const target of targets) {
+                drawTarget(target);
+            }
+
+            // Draw missiles
+            for (const missile of missiles) {
+                drawMissile(missile);
+            }
+
+            // Draw drag line if dragging
+            if (isDragging) {
+                ctx.beginPath();
+                ctx.moveTo(dragStartX, dragStartY);
+                ctx.lineTo(dragEndX, dragEndY);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Draw direction arrow
+                const dirX = dragEndX - dragStartX;
+                const dirY = dragEndY - dragStartY;
+                const length = Math.sqrt(dirX * dirX + dirY * dirY);
+
+                if (length > 0) {
+                    const normalizedDirX = dirX / length;
+                    const normalizedDirY = dirY / length;
+
+                    ctx.beginPath();
+                    ctx.moveTo(dragEndX, dragEndY);
+                    ctx.lineTo(dragEndX + normalizedDirX * 50, dragEndY + normalizedDirY * 50);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+
+                    // Draw arrowhead
+                    const arrowheadSize = 10;
+                    const angle = Math.atan2(normalizedDirY, normalizedDirX);
+
+                    ctx.beginPath();
+                    ctx.moveTo(dragEndX + normalizedDirX * 50, dragEndY + normalizedDirY * 50);
+                    ctx.lineTo(
+                        dragEndX + normalizedDirX * 50 - arrowheadSize * Math.cos(angle - Math.PI / 6),
+                        dragEndY + normalizedDirY * 50 - arrowheadSize * Math.sin(angle - Math.PI / 6)
+                    );
+                    ctx.lineTo(
+                        dragEndX + normalizedDirX * 50 - arrowheadSize * Math.cos(angle + Math.PI / 6),
+                        dragEndY + normalizedDirY * 50 - arrowheadSize * Math.sin(angle + Math.PI / 6)
+                    );
+                    ctx.closePath();
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Draw background grid
+        function drawGrid() {
+            const gridSize = 50;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+
+            // Draw vertical lines
+            for (let x = 0; x < canvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+
+            // Draw horizontal lines
+            for (let y = 0; y < canvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+
+        // Draw obstacle
+        function drawObstacle(obstacle) {
+            ctx.beginPath();
+            ctx.arc(obstacle.x, obstacle.y, obstacle.radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 0, 0, 1)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // Draw target
+        function drawTarget(target) {
+            // Draw target circle
+            ctx.beginPath();
+            ctx.arc(target.x, target.y, target.radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.7)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0, 255, 0, 1)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw target destination
+            ctx.beginPath();
+            ctx.arc(target.destinationX, target.destinationY, 5, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Draw line from target to destination
+            ctx.beginPath();
+            ctx.moveTo(target.x, target.y);
+            ctx.lineTo(target.destinationX, target.destinationY);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        // Draw missile
+        function drawMissile(missile) {
+            // Draw missile body
+            ctx.beginPath();
+            ctx.arc(missile.x, missile.y, missile.radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0, 0, 255, 0.7)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0, 0, 255, 1)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw missile direction indicator
+            ctx.beginPath();
+            ctx.moveTo(missile.x, missile.y);
+            ctx.lineTo(missile.x + missile.radius * Math.cos(missile.angle),
+                      missile.y + missile.radius * Math.sin(missile.angle));
+            ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // Spawn a new missile
+        function spawnMissile() {
+            const missile = {
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                radius: 10,
+                speed: 200,
+                angle: Math.random() * Math.PI * 2
+            };
+
+            missiles.push(missile);
+        }
+
+        // Spawn a new target
+        function spawnTarget() {
+            const target = {
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                radius: 20,
+                speed: 50,
+                angle: Math.random() * Math.PI * 2,
+                destinationX: Math.random() * canvas.width,
+                destinationY: Math.random() * canvas.height
+            };
+
+            targets.push(target);
+        }
+
+        // Create obstacles
+        function createObstacles() {
+            // Create random obstacles
+            for (let i = 0; i < 5; i++) {
+                const obstacle = {
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: 30 + Math.random() * 20
+                };
+
+                obstacles.push(obstacle);
+            }
+        }
+
+        // Check collision between two objects
+        function checkCollision(obj1, obj2) {
+            const dx = obj1.x - obj2.x;
+            const dy = obj1.y - obj2.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            return distance < obj1.radius + obj2.radius;
+        }
+
+        // Update score display
+        function updateScoreDisplay() {
+            scoreDisplay.textContent = `Score: ${score}`;
+        }
+
+        // Update lives display
+        function updateLivesDisplay() {
+            livesDisplay.textContent = `Lives: ${lives}`;
+        }
+
+        // Game over
+        function gameOver() {
+            gameRunning = false;
+            finalScoreDisplay.textContent = score;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        // Event listeners
+        startButton.addEventListener('click', initGame);
+        restartButton.addEventListener('click', initGame);
+
+        // Mouse event handlers
+        canvas.addEventListener('mousedown', (e) => {
+            if (gameRunning) {
+                isDragging = true;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+                dragEndX = e.clientX;
+                dragEndY = e.clientY;
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (gameRunning && isDragging) {
+                dragEndX = e.clientX;
+                dragEndY = e.clientY;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (gameRunning && isDragging) {
+                isDragging = false;
+
+                // Calculate direction vector
+                const dirX = dragEndX - dragStartX;
+                const dirY = dragEndY - dragStartY;
+                const length = Math.sqrt(dirX * dirX + dirY * dirY);
+
+                if (length > 0) {
+                    const normalizedDirX = dirX / length;
+                    const normalizedDirY = dirY / length;
+
+                    // Update missile direction
+                    for (const missile of missiles) {
+                        missile.angle = Math.atan2(normalizedDirY, normalizedDirX);
+                    }
+                }
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        // Show start screen
+        startScreen.style.display = 'flex';
+    </script>
+</body>
+</html>

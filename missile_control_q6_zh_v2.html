@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Missile Control</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #121212;
+            color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background-color: #1e1e1e;
+            border: 2px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .missile {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #ffcc00;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #ffcc00;
+            z-index: 10;
+        }
+
+        .target {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: #00ff00;
+            border-radius: 50%;
+            box-shadow: 0 0 15px #00ff00;
+            z-index: 5;
+        }
+
+        .obstacle {
+            position: absolute;
+            background-color: #ff4444;
+            border-radius: 4px;
+            z-index: 5;
+        }
+
+        .control-panel {
+            display: flex;
+            justify-content: space-between;
+            width: 800px;
+            margin-top: 20px;
+        }
+
+        .game-info {
+            background-color: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            width: 250px;
+        }
+
+        .score, .level, .missiles-left {
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .game-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            width: 500px;
+        }
+
+        button {
+            background-color: #4a4a4a;
+            color: #f0f0f0;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #5a5a5a;
+        }
+
+        button:active {
+            background-color: #3a3a3a;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: #2a2a2a;
+            padding: 30px;
+            border-radius: 8px;
+            width: 400px;
+            text-align: center;
+        }
+
+        .modal h2 {
+            margin-top: 0;
+            color: #ffcc00;
+        }
+
+        .modal p {
+            margin-bottom: 20px;
+        }
+
+        .modal button {
+            background-color: #ffcc00;
+            color: #121212;
+            font-weight: bold;
+        }
+
+        .modal button:hover {
+            background-color: #ffd633;
+        }
+
+        .laser {
+            position: absolute;
+            width: 2px;
+            height: 20px;
+            background-color: #ff4444;
+            z-index: 8;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container" id="gameContainer">
+        <!-- Game elements will be created by JavaScript -->
+    </div>
+
+    <div class="control-panel">
+        <div class="game-info">
+            <div class="score">Score: <span id="scoreValue">0</span></div>
+            <div class="level">Level: <span id="levelValue">1</span></div>
+            <div class="missiles-left">Missiles Left: <span id="missilesValue">3</span></div>
+        </div>
+        <div class="game-controls">
+            <button id="startButton">Start Game</button>
+            <button id="pauseButton">Pause</button>
+            <button id="resetButton">Reset</button>
+        </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div class="modal" id="gameOverModal">
+        <div class="modal-content">
+            <h2>Game Over</h2>
+            <p>Your final score: <span id="finalScore">0</span></p>
+            <p>Level reached: <span id="finalLevel">1</span></p>
+            <button id="playAgainButton">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // Game variables
+        const gameContainer = document.getElementById('gameContainer');
+        const scoreValue = document.getElementById('scoreValue');
+        const levelValue = document.getElementById('levelValue');
+        const missilesValue = document.getElementById('missilesValue');
+        const startButton = document.getElementById('startButton');
+        const pauseButton = document.getElementById('pauseButton');
+        const resetButton = document.getElementById('resetButton');
+        const gameOverModal = document.getElementById('gameOverModal');
+        const finalScore = document.getElementById('finalScore');
+        const finalLevel = document.getElementById('finalLevel');
+        const playAgainButton = document.getElementById('playAgainButton');
+
+        let gameWidth = gameContainer.offsetWidth;
+        let gameHeight = gameContainer.offsetHeight;
+
+        let score = 0;
+        let level = 1;
+        let missilesLeft = 3;
+        let gameRunning = false;
+        let gamePaused = false;
+        let obstacles = [];
+        let missiles = [];
+        let targets = [];
+        let lasers = [];
+
+        // Game configuration
+        const missileSpeed = 3;
+        const laserSpeed = 10;
+        const obstacleColors = ['#ff4444', '#ff8844', '#ffcc44'];
+
+        // Initialize the game
+        function initGame() {
+            // Reset game state
+            score = 0;
+            level = 1;
+            missilesLeft = 3;
+            gameRunning = true;
+            gamePaused = false;
+
+            // Update UI
+            scoreValue.textContent = score;
+            levelValue.textContent = level;
+            missilesValue.textContent = missilesLeft;
+
+            // Clear the game container
+            gameContainer.innerHTML = '';
+
+            // Create obstacles
+            createObstacles();
+
+            // Create initial targets
+            createTargets();
+
+            // Start the game loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Create obstacles
+        function createObstacles() {
+            obstacles = [];
+
+            // Create random obstacles
+            for (let i = 0; i < 10; i++) {
+                const width = Math.random() * 100 + 50;
+                const height = Math.random() * 20 + 10;
+                const x = Math.random() * (gameWidth - width);
+                const y = Math.random() * (gameHeight - height);
+                const colorIndex = Math.floor(Math.random() * obstacleColors.length);
+
+                const obstacle = document.createElement('div');
+                obstacle.className = 'obstacle';
+                obstacle.style.width = width + 'px';
+                obstacle.style.height = height + 'px';
+                obstacle.style.left = x + 'px';
+                obstacle.style.top = y + 'px';
+                obstacle.style.backgroundColor = obstacleColors[colorIndex];
+
+                gameContainer.appendChild(obstacle);
+
+                obstacles.push({
+                    element: obstacle,
+                    x: x,
+                    y: y,
+                    width: width,
+                    height: height
+                });
+            }
+        }
+
+        // Create targets
+        function createTargets() {
+            targets = [];
+
+            // Create random targets
+            for (let i = 0; i < 3; i++) {
+                const x = Math.random() * (gameWidth - 20) + 10;
+                const y = Math.random() * (gameHeight - 20) + 10;
+
+                const target = document.createElement('div');
+                target.className = 'target';
+                target.style.left = x + 'px';
+                target.style.top = y + 'px';
+
+                gameContainer.appendChild(target);
+
+                targets.push({
+                    element: target,
+                    x: x,
+                    y: y,
+                    width: 20,
+                    height: 20,
+                    hit: false
+                });
+            }
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (!gameRunning) return;
+            if (gamePaused) {
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+
+            // Move missiles
+            moveMissiles();
+
+            // Move lasers
+            moveLasers();
+
+            // Check for collisions
+            checkCollisions();
+
+            // Check if all targets are hit
+            if (targets.every(target => target.hit)) {
+                // Level complete
+                levelComplete();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Move missiles
+        function moveMissiles() {
+            for (let i = missiles.length - 1; i >= 0; i--) {
+                const missile = missiles[i];
+
+                // Move the missile
+                missile.x += missile.dx;
+                missile.y += missile.dy;
+
+                // Update the missile position
+                missile.element.style.left = missile.x + 'px';
+                missile.element.style.top = missile.y + 'px';
+
+                // Check if the missile is out of bounds
+                if (missile.x < 0 || missile.x > gameWidth || missile.y < 0 || missile.y > gameHeight) {
+                    // Remove the missile
+                    gameContainer.removeChild(missile.element);
+                    missiles.splice(i, 1);
+
+                    // Use a missile
+                    missilesLeft--;
+                    missilesValue.textContent = missilesLeft;
+                }
+            }
+        }
+
+        // Move lasers
+        function moveLasers() {
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                const laser = lasers[i];
+
+                // Move the laser
+                laser.y -= laser.dy;
+
+                // Update the laser position
+                laser.element.style.left = laser.x + 'px';
+                laser.element.style.top = laser.y + 'px';
+
+                // Check if the laser is out of bounds
+                if (laser.y < 0) {
+                    // Remove the laser
+                    gameContainer.removeChild(laser.element);
+                    lasers.splice(i, 1);
+                }
+            }
+        }
+
+        // Check for collisions
+        function checkCollisions() {
+            // Check for missile-target collisions
+            for (let i = missiles.length - 1; i >= 0; i--) {
+                const missile = missiles[i];
+
+                for (let j = 0; j < targets.length; j++) {
+                    const target = targets[j];
+
+                    if (!target.hit &&
+                        missile.x < target.x + target.width &&
+                        missile.x + 10 > target.x &&
+                        missile.y < target.y + target.height &&
+                        missile.y + 10 > target.y) {
+
+                        // Hit a target
+                        target.hit = true;
+                        target.element.style.backgroundColor = '#888888';
+
+                        // Remove the missile
+                        gameContainer.removeChild(missile.element);
+                        missiles.splice(i, 1);
+
+                        // Increase score
+                        score += 100 * level;
+                        scoreValue.textContent = score;
+
+                        // Use a missile
+                        missilesLeft--;
+                        missilesValue.textContent = missilesLeft;
+
+                        // Create a new target
+                        setTimeout(createNewTarget, 1000);
+
+                        break;
+                    }
+                }
+            }
+
+            // Check for laser-obstacle collisions
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                const laser = lasers[i];
+
+                for (let j = 0; j < obstacles.length; j++) {
+                    const obstacle = obstacles[j];
+
+                    if (laser.x < obstacle.x + obstacle.width &&
+                        laser.x + 2 > obstacle.x &&
+                        laser.y < obstacle.y + obstacle.height &&
+                        laser.y + 20 > obstacle.y) {
+
+                        // Hit an obstacle
+                        gameContainer.removeChild(laser.element);
+                        lasers.splice(i, 1);
+
+                        // Decrease score
+                        score = Math.max(0, score - 50);
+                        scoreValue.textContent = score;
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Create a new target
+        function createNewTarget() {
+            // Remove an existing target
+            if (targets.length > 0) {
+                const target = targets[0];
+                gameContainer.removeChild(target.element);
+                targets.splice(0, 1);
+            }
+
+            // Create a new target
+            const x = Math.random() * (gameWidth - 20) + 10;
+            const y = Math.random() * (gameHeight - 20) + 10;
+
+            const target = document.createElement('div');
+            target.className = 'target';
+            target.style.left = x + 'px';
+            target.style.top = y + 'px';
+
+            gameContainer.appendChild(target);
+
+            targets.push({
+                element: target,
+                x: x,
+                y: y,
+                width: 20,
+                height: 20,
+                hit: false
+            });
+        }
+
+        // Level complete
+        function levelComplete() {
+            // Show level complete message
+            const levelCompleteMessage = document.createElement('div');
+            levelCompleteMessage.style.position = 'absolute';
+            levelCompleteMessage.style.top = '50%';
+            levelCompleteMessage.style.left = '50%';
+            levelCompleteMessage.style.transform = 'translate(-50%, -50%)';
+            levelCompleteMessage.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+            levelCompleteMessage.style.padding = '20px';
+            levelCompleteMessage.style.borderRadius = '8px';
+            levelCompleteMessage.style.color = '#f0f0f0';
+            levelCompleteMessage.style.textAlign = 'center';
+            levelCompleteMessage.style.zIndex = '20';
+
+            levelCompleteMessage.innerHTML = `
+                <h2>Level ${level} Complete!</h2>
+                <p>Score: ${score}</p>
+                <p>Missiles Left: ${missilesLeft}</p>
+                <button id="nextLevelButton">Next Level</button>
+            `;
+
+            gameContainer.appendChild(levelCompleteMessage);
+
+            // Add event listener to the next level button
+            document.getElementById('nextLevelButton').addEventListener('click', () => {
+                // Remove the level complete message
+                gameContainer.removeChild(levelCompleteMessage);
+
+                // Increase level
+                level++;
+                levelValue.textContent = level;
+
+                // Reset missiles left
+                missilesLeft = 3;
+                missilesValue.textContent = missilesLeft;
+
+                // Create new targets
+                createTargets();
+
+                // Continue the game loop
+                requestAnimationFrame(gameLoop);
+            });
+        }
+
+        // Level complete
+        function levelComplete() {
+            // Show level complete message
+            const levelCompleteMessage = document.createElement('div');
+            levelCompleteMessage.style.position = 'absolute';
+            levelCompleteMessage.style.top = '50%';
+            levelCompleteMessage.style.left = '50%';
+            levelCompleteMessage.style.transform = 'translate(-50%, -50%)';
+            levelCompleteMessage.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+            levelCompleteMessage.style.padding = '20px';
+            levelCompleteMessage.style.borderRadius = '8px';
+            levelCompleteMessage.style.color = '#f0f0f0';
+            levelCompleteMessage.style.textAlign = 'center';
+            levelCompleteMessage.style.zIndex = '20';
+
+            levelCompleteMessage.innerHTML = `
+                <h2>Level ${level} Complete!</h2>
+                <p>Score: ${score}</p>
+                <p>Missiles Left: ${missilesLeft}</p>
+                <button id="nextLevelButton">Next Level</button>
+            `;
+
+            gameContainer.appendChild(levelCompleteMessage);
+
+            // Add event listener to the next level button
+            document.getElementById('nextLevelButton').addEventListener('click', () => {
+                // Remove the level complete message
+                gameContainer.removeChild(levelCompleteMessage);
+
+                // Increase level
+                level++;
+                levelValue.textContent = level;
+
+                // Reset missiles left
+                missilesLeft = 3;
+                missilesValue.textContent = missilesLeft;
+
+                // Create new targets
+                createTargets();
+
+                // Continue the game loop
+                requestAnimationFrame(gameLoop);
+            });
+        }
+
+        // Start the game
+        function startGame() {
+            if (!gameRunning && !gamePaused) {
+                initGame();
+            } else if (gamePaused) {
+                gamePaused = false;
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Pause the game
+        function pauseGame() {
+            if (gameRunning && !gamePaused) {
+                gamePaused = true;
+            }
+        }
+
+        // Reset the game
+        function resetGame() {
+            gameRunning = false;
+            gamePaused = false;
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Event listeners
+        startButton.addEventListener('click', startGame);
+        pauseButton.addEventListener('click', pauseGame);
+        resetButton.addEventListener('click', resetGame);
+        playAgainButton.addEventListener('click', () => {
+            gameOverModal.style.display = 'none';
+            startGame();
+        });
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (!gameRunning || gamePaused) return;
+
+            const missile = missiles[0]; // Use the first missile for control
+
+            if (!missile) return;
+
+            switch (e.key) {
+                case 'ArrowUp':
+                    missile.dy = -missileSpeed;
+                    missile.dx = 0;
+                    break;
+                case 'ArrowDown':
+                    missile.dy = missileSpeed;
+                    missile.dx = 0;
+                    break;
+                case 'ArrowLeft':
+                    missile.dx = -missileSpeed;
+                    missile.dy = 0;
+                    break;
+                case 'ArrowRight':
+                    missile.dx = missileSpeed;
+                    missile.dy = 0;
+                    break;
+                case ' ': // Spacebar
+                    // Fire a laser
+                    const laser = document.createElement('div');
+                    laser.className = 'laser';
+                    laser.style.left = missile.x + 4 + 'px';
+                    laser.style.top = missile.y + 'px';
+
+                    gameContainer.appendChild(laser);
+
+                    lasers.push({
+                        element: laser,
+                        x: missile.x + 4,
+                        y: missile.y,
+                        dy: laserSpeed
+                    });
+                    break;
+            }
+        });
+    </script>
+</body>
+</html>

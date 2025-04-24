@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Missile Control</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #121212;
+            color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background-color: #1e1e1e;
+            border: 2px solid #303030;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .missile {
+            position: absolute;
+            width: 20px;
+            height: 6px;
+            background-color: #ff4500;
+            border-radius: 3px;
+            transform-origin: center;
+        }
+
+        .target {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: #4CAF50;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .obstacle {
+            position: absolute;
+            background-color: #7F7F7F;
+            border-radius: 4px;
+        }
+
+        .control-panel {
+            width: 800px;
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #2a2a2a;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .score-display, .lives-display {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .button:hover {
+            background-color: #45a049;
+        }
+
+        .button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .game-over, .level-complete {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            display: none;
+        }
+
+        .message {
+            font-size: 36px;
+            margin-bottom: 20px;
+            color: #ff4500;
+        }
+
+        .sub-message {
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+
+        .final-score {
+            font-size: 28px;
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div id="missile"></div>
+        <div id="target" class="target"></div>
+    </div>
+
+    <div class="control-panel">
+        <div class="score-display">Score: <span id="score">0</span></div>
+        <div class="button" id="startButton">Start Game</div>
+        <div class="lives-display">Lives: <span id="lives">3</span></div>
+    </div>
+
+    <div class="game-over" id="gameOver">
+        <div class="message">GAME OVER</div>
+        <div class="sub-message">Final Score:</div>
+        <div class="final-score"><span id="finalScore">0</span></div>
+    </div>
+
+    <div class="level-complete" id="levelComplete">
+        <div class="message">LEVEL COMPLETE!</div>
+        <div class="sub-message">Score:</div>
+        <div class="final-score"><span id="levelScore">0</span></div>
+    </div>
+
+    <script>
+        // Game variables
+        const gameContainer = document.querySelector('.game-container');
+        const missileElement = document.getElementById('missile');
+        const targetElement = document.getElementById('target');
+        const scoreElement = document.getElementById('score');
+        const livesElement = document.getElementById('lives');
+        const startButton = document.getElementById('startButton');
+        const gameOverScreen = document.getElementById('gameOver');
+        const finalScoreElement = document.getElementById('finalScore');
+        const levelCompleteScreen = document.getElementById('levelComplete');
+        const levelScoreElement = document.getElementById('levelScore');
+
+        let gameWidth = gameContainer.offsetWidth;
+        let gameHeight = gameContainer.offsetHeight;
+
+        let score = 0;
+        let lives = 3;
+        let gameRunning = false;
+        let missileX = 50;
+        let missileY = gameHeight / 2;
+        let missileAngle = 0;
+        let missileSpeed = 5;
+        let targetX, targetY;
+        let obstacles = [];
+        let missileMoving = false;
+        let missileTargeting = false;
+        let missileTargeted = false;
+
+        // Initialize the game
+        function initGame() {
+            // Reset game state
+            score = 0;
+            lives = 3;
+            gameRunning = true;
+            missileMoving = false;
+            missileTargeting = false;
+            missileTargeted = false;
+
+            // Update display
+            scoreElement.textContent = score;
+            livesElement.textContent = lives;
+
+            // Hide game over screen
+            gameOverScreen.style.display = 'none';
+            levelCompleteScreen.style.display = 'none';
+
+            // Position missile
+            missileX = 50;
+            missileY = gameHeight / 2;
+            updateMissilePosition();
+
+            // Create target
+            createTarget();
+
+            // Create obstacles
+            createObstacles();
+
+            // Start game loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Create a new target
+        function createTarget() {
+            // Remove existing target
+            if (targetElement.parentNode) {
+                targetElement.parentNode.removeChild(targetElement);
+            }
+
+            // Create new target
+            targetElement.style.left = (gameWidth - 100) + 'px';
+            targetElement.style.top = (gameHeight / 2 - 15) + 'px';
+
+            // Generate new target position (away from obstacles)
+            let validPosition = false;
+            while (!validPosition) {
+                targetX = Math.random() * (gameWidth - 200) + 100;
+                targetY = Math.random() * (gameHeight - 30) + 15;
+
+                validPosition = true;
+                for (let obstacle of obstacles) {
+                    if (
+                        targetX > obstacle.x &&
+                        targetX < obstacle.x + obstacle.width &&
+                        targetY > obstacle.y &&
+                        targetY < obstacle.y + obstacle.height
+                    ) {
+                        validPosition = false;
+                        break;
+                    }
+                }
+            }
+
+            targetElement.style.left = targetX + 'px';
+            targetElement.style.top = targetY + 'px';
+        }
+
+        // Create obstacles
+        function createObstacles() {
+            obstacles = [];
+
+            // Create random obstacles
+            for (let i = 0; i < 5; i++) {
+                let obstacle = {
+                    x: Math.random() * (gameWidth - 50) + 25,
+                    y: Math.random() * (gameHeight - 50) + 25,
+                    width: Math.random() * 50 + 50,
+                    height: Math.random() * 50 + 50
+                };
+
+                // Ensure obstacles don't overlap too much
+                let validObstacle = true;
+                for (let existingObstacle of obstacles) {
+                    if (
+                        obstacle.x < existingObstacle.x + existingObstacle.width + 20 &&
+                        obstacle.x + obstacle.width > existingObstacle.x - 20 &&
+                        obstacle.y < existingObstacle.y + existingObstacle.height + 20 &&
+                        obstacle.y + obstacle.height > existingObstacle.y - 20
+                    ) {
+                        validObstacle = false;
+                        break;
+                    }
+                }
+
+                if (validObstacle) {
+                    obstacles.push(obstacle);
+
+                    let obstacleElement = document.createElement('div');
+                    obstacleElement.className = 'obstacle';
+                    obstacleElement.style.left = obstacle.x + 'px';
+                    obstacleElement.style.top = obstacle.y + 'px';
+                    obstacleElement.style.width = obstacle.width + 'px';
+                    obstacleElement.style.height = obstacle.height + 'px';
+
+                    gameContainer.appendChild(obstacleElement);
+                }
+            }
+        }
+
+        // Update missile position
+        function updateMissilePosition() {
+            missileElement.style.left = missileX + 'px';
+            missileElement.style.top = missileY + 'px';
+            missileElement.style.transform = `rotate(${missileAngle}deg)`;
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (!gameRunning) return;
+
+            // Move missile towards target if targeting
+            if (missileTargeting && !missileTargeted) {
+                // Calculate direction to target
+                let dx = targetX - missileX;
+                let dy = targetY - missileY;
+                let distance = Math.sqrt(dx * dx + dy * dy);
+
+                // Update missile angle
+                missileAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+                // Move missile
+                missileX += Math.cos(missileAngle * Math.PI / 180) * missileSpeed;
+                missileY += Math.sin(missileAngle * Math.PI / 180) * missileSpeed;
+
+                // Update missile position
+                updateMissilePosition();
+
+                // Check if missile reached target
+                if (distance < missileSpeed) {
+                    missileTargeting = false;
+                    missileTargeted = true;
+
+                    // Increase score
+                    score += 100;
+                    scoreElement.textContent = score;
+
+                    // Level complete
+                    levelCompleteScreen.style.display = 'flex';
+                    levelScoreElement.textContent = score;
+                    gameRunning = false;
+                    return;
+                }
+            }
+
+            // Check for collisions with obstacles
+            for (let obstacle of obstacles) {
+                if (
+                    missileX > obstacle.x &&
+                    missileX < obstacle.x + obstacle.width &&
+                    missileY > obstacle.y &&
+                    missileY < obstacle.y + obstacle.height
+                ) {
+                    // Missile hit an obstacle
+                    lives--;
+                    livesElement.textContent = lives;
+
+                    // Reset missile position
+                    missileX = 50;
+                    missileY = gameHeight / 2;
+                    missileAngle = 0;
+                    updateMissilePosition();
+
+                    if (lives <= 0) {
+                        // Game over
+                        finalScoreElement.textContent = score;
+                        gameOverScreen.style.display = 'flex';
+                        gameRunning = false;
+                        return;
+                    }
+
+                    break;
+                }
+            }
+
+            // Continue game loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Event listeners
+        startButton.addEventListener('click', function() {
+            if (!gameRunning) {
+                initGame();
+            }
+        });
+
+        // Keyboard controls
+        document.addEventListener('keydown', function(event) {
+            if (!gameRunning) return;
+
+            // Spacebar to launch missile
+            if (event.code === 'Space' && !missileMoving) {
+                missileMoving = true;
+                missileTargeting = true;
+
+                // Calculate angle to target
+                let dx = targetX - missileX;
+                let dy = targetY - missileY;
+                missileAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            gameWidth = gameContainer.offsetWidth;
+            gameHeight = gameContainer.offsetHeight;
+        });
+    </script>
+</body>
+</html>

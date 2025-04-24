@@ -1,0 +1,32 @@
+<svg width="400" height="300" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background clouds -->
+  <ellipse cx="200" cy="150" rx="180" ry="80" fill="#f0f0f0" opacity="0.5"/>
+  <ellipse cx="150" cy="180" rx="120" ry="50" fill="#f0f0f0" opacity="0.5"/>
+
+  <!-- Dragon body -->
+  <path d="M100,150 C120,120 180,100 250,120 S350,150 350,180 C350,210 300,220 250,210 S120,180 100,150 Z" fill="#d32f2f"/>
+
+  <!-- Dragon neck -->
+  <path d="M250,120 C270,100 300,90 320,100" stroke="#d32f2f" stroke-width="30" fill="none"/>
+
+  <!-- Dragon head -->
+  <ellipse cx="320" cy="100" rx="40" ry="30" fill="#d32f2f"/>
+
+  <!-- Dragon eyes -->
+  <circle cx="330" cy="95" r="5" fill="white"/>
+  <circle cx="335" cy="90" r="3" fill="black"/>
+
+  <!-- Dragon wings -->
+  <path d="M150,120 C100,80 50,120 80,150 S150,180 150,120 Z" fill="#d32f2f"/>
+  <path d="M200,120 C150,50 100,100 150,120 S250,150 200,120 Z" fill="#d32f2f"/>
+
+  <!-- Dragon spikes -->
+  <path d="M120,140 L130,130 L140,140 Z" fill="#d32f2f"/>
+  <path d="M170,140 L180,125 L190,140 Z" fill="#d32f2f"/>
+  <path d="M220,140 L230,125 L240,140 Z" fill="#d32f2f"/>
+  <path d="M270,140 L280,125 L290,140 Z" fill="#d32f2f"/>
+
+  <!-- Smoke from nostrils -->
+  <ellipse cx="330" cy="110" rx="10" ry="5" fill="#f0f0f0" opacity="0.7"/>
+  <ellipse cx="335" cy="115" rx="8" ry="4" fill="#f0f0f0" opacity="0.5"/>
+</svg>

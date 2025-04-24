@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Missile Control</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: #121212;
+            color: #f0f0f0;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: #1a1a1a;
+            overflow: hidden;
+        }
+
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        #score-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            color: #4caf50;
+            font-weight: bold;
+        }
+
+        #lives-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 24px;
+            color: #f44336;
+            font-weight: bold;
+        }
+
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            display: none;
+        }
+
+        #game-over-screen h1 {
+            font-size: 48px;
+            color: #f44336;
+            margin-bottom: 20px;
+        }
+
+        #final-score {
+            font-size: 32px;
+            color: #4caf50;
+            margin-bottom: 30px;
+        }
+
+        #restart-button {
+            padding: 15px 30px;
+            font-size: 24px;
+            background-color: #4caf50;
+            color: #121212;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #restart-button:hover {
+            background-color: #45a049;
+        }
+
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        #start-screen h1 {
+            font-size: 48px;
+            color: #4caf50;
+            margin-bottom: 20px;
+        }
+
+        #start-button {
+            padding: 15px 30px;
+            font-size: 24px;
+            background-color: #4caf50;
+            color: #121212;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #start-button:hover {
+            background-color: #45a049;
+        }
+
+        #instructions {
+            color: #f0f0f0;
+            text-align: center;
+            max-width: 600px;
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+
+        <div id="ui-container">
+            <div id="score-display">Score: 0</div>
+            <div id="lives-display">Lives: 3</div>
+        </div>
+
+        <div id="start-screen">
+            <h1>Missile Control</h1>
+            <div id="instructions">
+                <p>Click and drag to guide missiles to their targets.</p>
+                <p>Help the missiles reach their destinations without crashing into obstacles.</p>
+                <p>You have 3 lives. Miss a target or crash into an obstacle and lose a life.</p>
+            </div>
+            <button id="start-button">Start Game</button>
+        </div>
+
+        <div id="game-over-screen">
+            <h1>Game Over</h1>
+            <div id="final-score">Final Score: 0</div>
+            <button id="restart-button">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // Game variables
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+        const scoreDisplay = document.getElementById('score-display');
+        const livesDisplay = document.getElementById('lives-display');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        let width, height;
+        let score = 0;
+        let lives = 3;
+        let missiles = [];
+        let targets = [];
+        let obstacles = [];
+        let gameRunning = false;
+        let animationFrameId;
+        let lastTime = 0;
+        let missileSpawnTimer = 0;
+
+        // Mouse interaction variables
+        let isDragging = false;
+        let dragStartX, dragStartY;
+        let currentMissile = null;
+
+        // Initialize the game
+        function init() {
+            // Set canvas size
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+
+            // Reset game state
+            score = 0;
+            lives = 3;
+            missiles = [];
+            targets = [];
+            obstacles = [];
+
+            // Update UI
+            scoreDisplay.textContent = `Score: ${score}`;
+            livesDisplay.textContent = `Lives: ${lives}`;
+
+            // Hide screens
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+
+            // Create initial game elements
+            createObstacles();
+            spawnTarget();
+
+            // Start the game loop
+            gameRunning = true;
+            lastTime = performance.now();
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // Create obstacles
+        function createObstacles() {
+            // Create some fixed obstacles
+            obstacles = [
+                { x: width * 0.2, y: height * 0.3, width: 100, height: 20, angle: Math.PI / 4 },
+                { x: width * 0.6, y: height * 0.5, width: 80, height: 20, angle: -Math.PI / 6 },
+                { x: width * 0.4, y: height * 0.7, width: 120, height: 20, angle: Math.PI / 3 },
+                { x: width * 0.8, y: height * 0.3, width: 60, height: 20, angle: -Math.PI / 4 }
+            ];
+        }
+
+        // Spawn a new target
+        function spawnTarget() {
+            // Create a new target at a random position
+            const target = {
+                x: Math.random() * (width - 200) + 100,
+                y: Math.random() * (height - 200) + 100,
+                radius: 30,
+                color: '#4caf50',
+                reached: false
+            };
+
+            targets.push(target);
+        }
+
+        // Create a new missile
+        function createMissile(startX, startY, targetX, targetY) {
+            const angle = Math.atan2(targetY - startY, targetX - startX);
+            const velocity = {
+                x: Math.cos(angle) * 5,
+                y: Math.sin(angle) * 5
+            };
+
+            const missile = {
+                x: startX,
+                y: startY,
+                radius: 10,
+                color: '#ff9800',
+                velocity: velocity,
+                trail: [],
+                targetX: targetX,
+                targetY: targetY,
+                reached: false
+            };
+
+            missiles.push(missile);
+        }
+
+        // Game loop
+        function gameLoop(timestamp) {
+            // Calculate delta time
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, width, height);
+
+            // Update and draw game elements
+            updateGame(deltaTime);
+            drawGame();
+
+            // Continue the game loop if the game is running
+            if (gameRunning) {
+                animationFrameId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Update game state
+        function updateGame(deltaTime) {
+            // Update missile spawn timer
+            missileSpawnTimer += deltaTime;
+            if (missileSpawnTimer > 3000) { // Spawn a new missile every 3 seconds
+                missileSpawnTimer = 0;
+                spawnNewMissile();
+            }
+
+            // Update missiles
+            for (let i = missiles.length - 1; i >= 0; i--) {
+                const missile = missiles[i];
+
+                // Add current position to trail
+                missile.trail.push({ x: missile.x, y: missile.y });
+
+                // Limit trail length
+                if (missile.trail.length > 20) {
+                    missile.trail.shift();
+                }
+
+                // Update position
+                missile.x += missile.velocity.x;
+                missile.y += missile.velocity.y;
+
+                // Check if missile reached target
+                if (!missile.reached) {
+                    const dx = missile.x - missile.targetX;
+                    const dy = missile.y - missile.targetY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < 20) {
+                        missile.reached = true;
+                        score += 100;
+                        scoreDisplay.textContent = `Score: ${score}`;
+
+                        // Remove the missile
+                        missiles.splice(i, 1);
+
+                        // Spawn a new target
+                        if (targets.length === 0) {
+                            spawnTarget();
+                        }
+
+                        continue;
+                    }
+                }
+
+                // Check for collisions with obstacles
+                for (const obstacle of obstacles) {
+                    if (checkMissileObstacleCollision(missile, obstacle)) {
+                        // Remove the missile
+                        missiles.splice(i, 1);
+
+                        // Lose a life
+                        lives--;
+                        livesDisplay.textContent = `Lives: ${lives}`;
+
+                        if (lives <= 0) {
+                            gameOver();
+                        }
+
+                        break;
+                    }
+                }
+
+                // Check if missile is out of bounds
+                if (missile.x < 0 || missile.x > width || missile.y < 0 || missile.y > height) {
+                    // Remove the missile
+                    missiles.splice(i, 1);
+
+                    // Lose a life
+                    lives--;
+                    livesDisplay.textContent = `Lives: ${lives}`;
+
+                    if (lives <= 0) {
+                        gameOver();
+                    }
+                }
+            }
+        }
+
+        // Check collision between missile and obstacle
+        function checkMissileObstacleCollision(missile, obstacle) {
+            // For rectangular obstacles
+            if (obstacle.angle === 0) {
+                // Simple AABB collision
+                const rect = {
+                    x: obstacle.x - obstacle.width / 2,
+                    y: obstacle.y - obstacle.height / 2,
+                    width: obstacle.width,
+                    height: obstacle.height
+                };
+
+                return (
+                    missile.x + missile.radius > rect.x &&
+                    missile.x - missile.radius < rect.x + rect.width &&
+                    missile.y + missile.radius > rect.y &&
+                    missile.y - missile.radius < rect.y + rect.height
+                );
+            } else {
+                // More complex polygon collision (simplified)
+                // Check if missile center is inside the obstacle polygon
+                // This is a simplified approach - a more accurate polygon collision would be needed
+                const dx = missile.x - obstacle.x;
+                const dy = missile.y - obstacle.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                return distance < missile.radius + Math.min(obstacle.width, obstacle.height) / 2;
+            }
+        }
+
+        // Draw game elements
+        function drawGame() {
+            // Draw obstacles
+            for (const obstacle of obstacles) {
+                drawObstacle(obstacle);
+            }
+
+            // Draw targets
+            for (const target of targets) {
+                drawTarget(target);
+            }
+
+            // Draw missiles
+            for (const missile of missiles) {
+                drawMissile(missile);
+            }
+        }
+
+        // Draw obstacle
+        function drawObstacle(obstacle) {
+            ctx.save();
+
+            // Translate to obstacle center
+            ctx.translate(obstacle.x, obstacle.y);
+
+            // Rotate
+            ctx.rotate(obstacle.angle);
+
+            // Draw obstacle
+            ctx.fillStyle = '#795548';
+            ctx.fillRect(-obstacle.width / 2, -obstacle.height / 2, obstacle.width, obstacle.height);
+
+            // Draw obstacle details
+            ctx.fillStyle = '#5d4030';
+            ctx.fillRect(-obstacle.width / 2 + 5, -obstacle.height / 2 + 5, obstacle.width - 10, obstacle.height - 10);
+
+            ctx.restore();
+        }
+
+        // Draw target
+        function drawTarget(target) {
+            // Draw outer circle
+            ctx.beginPath();
+            ctx.arc(target.x, target.y, target.radius, 0, Math.PI * 2);
+            ctx.fillStyle = target.color;
+            ctx.fill();
+
+            // Draw inner circle
+            ctx.beginPath();
+            ctx.arc(target.x, target.y, target.radius * 0.6, 0, Math.PI * 2);
+            ctx.fillStyle = '#2e7d32';
+            ctx.fill();
+
+            // Draw center point
+            ctx.beginPath();
+            ctx.arc(target.x, target.y, target.radius * 0.2, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffeb3b';
+            ctx.fill();
+        }
+
+        // Draw missile
+        function drawMissile(missile) {
+            // Draw trail
+            for (let i = 0; i < missile.trail.length; i++) {
+                const point = missile.trail[i];
+                const alpha = i / missile.trail.length;
+
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 5 * alpha, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 152, 0, ${alpha})`;
+                ctx.fill();
+            }
+
+            // Draw missile
+            ctx.beginPath();
+            ctx.arc(missile.x, missile.y, missile.radius, 0, Math.PI * 2);
+            ctx.fillStyle = missile.color;
+            ctx.fill();
+
+            // Draw missile details
+            ctx.beginPath();
+            ctx.arc(missile.x, missile.y, missile.radius * 0.6, 0, Math.PI * 2);
+            ctx.fillStyle = '#e65100';
+            ctx.fill();
+        }
+
+        // Game over
+        function gameOver() {
+            gameRunning = false;
+            cancelAnimationFrame(animationFrameId);
+
+            finalScoreDisplay.textContent = `Final Score: ${score}`;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        // Handle window resize
+        function handleResize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+
+        // Event listeners
+        window.addEventListener('resize', handleResize);
+
+        startButton.addEventListener('click', init);
+
+        restartButton.addEventListener('click', init);
+
+        // Mouse event handlers
+        canvas.addEventListener('mousedown', (e) => {
+            if (missiles.length > 0) {
+                isDragging = true;
+                dragStartX = missiles[missiles.length - 1].x;
+                dragStartY = missiles[missiles.length - 1].y;
+                currentMissile = missiles[missiles.length - 1];
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging && currentMissile) {
+                // Calculate new velocity based on mouse position
+                const mouseX = e.clientX;
+                const mouseY = e.clientY;
+
+                const angle = Math.atan2(mouseY - dragStartY, mouseX - dragStartX);
+
+                currentMissile.velocity.x = Math.cos(angle) * 5;
+                currentMissile.velocity.y = Math.sin(angle) * 5;
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (isDragging && currentMissile) {
+                // Calculate new velocity based on mouse position
+                const mouseX = e.clientX;
+                const mouseY = e.clientY;
+
+                const angle = Math.atan2(mouseY - dragStartY, mouseX - dragStartX);
+
+                currentMissile.velocity.x = Math.cos(angle) * 5;
+                currentMissile.velocity.y = Math.sin(angle) * 5;
+
+                isDragging = false;
+                currentMissile = null;
+            }
+        });
+
+        // Start the game
+        window.onload = () => {
+            // Initialize canvas size
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Missile Control Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: #121212;
+            color: #f0f0f0;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: #1a1a1a;
+            overflow: hidden;
+        }
+
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        #score-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            color: #ffffff;
+            text-shadow: 0 0 5px rgba(0, 200, 255, 0.7);
+        }
+
+        #lives-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 24px;
+            color: #ffffff;
+            text-shadow: 0 0 5px rgba(255, 100, 100, 0.7);
+        }
+
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            display: none;
+        }
+
+        #game-over-screen h1 {
+            font-size: 48px;
+            color: #ff5555;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(255, 100, 100, 0.7);
+        }
+
+        #final-score {
+            font-size: 32px;
+            color: #ffffff;
+            margin-bottom: 30px;
+        }
+
+        #restart-button {
+            padding: 15px 30px;
+            font-size: 24px;
+            background-color: #4455ff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #restart-button:hover {
+            background-color: #5566ff;
+        }
+
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        #start-screen h1 {
+            font-size: 48px;
+            color: #4488ff;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(68, 136, 255, 0.7);
+        }
+
+        #start-screen p {
+            font-size: 20px;
+            color: #cccccc;
+            margin-bottom: 30px;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        #start-button {
+            padding: 15px 30px;
+            font-size: 24px;
+            background-color: #4455ff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #start-button:hover {
+            background-color: #5566ff;
+        }
+
+        .control-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 18px;
+            color: #aaaaaa;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+
+        <div id="ui-container">
+            <div id="score-display">Score: 0</div>
+            <div id="lives-display">Lives: 3</div>
+
+            <div id="start-screen">
+                <h1>Missile Control</h1>
+                <p>Guide missiles to their targets by moving your cursor. Avoid obstacles and save your missiles!</p>
+                <button id="start-button">Start Game</button>
+            </div>
+
+            <div id="game-over-screen">
+                <h1>Game Over</h1>
+                <div id="final-score">Score: 0</div>
+                <button id="restart-button">Play Again</button>
+            </div>
+
+            <div class="control-hint">Move your cursor to guide missiles</div>
+        </div>
+    </div>
+
+    <script>
+        // Game variables
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score-display');
+        const livesDisplay = document.getElementById('lives-display');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+
+        // Set canvas size
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Game state
+        let gameRunning = false;
+        let score = 0;
+        let lives = 3;
+        let missiles = [];
+        let targets = [];
+        let obstacles = [];
+        let lastTime = 0;
+        let missileSpawnTimer = 0;
+        let targetSpawnTimer = 0;
+
+        // Mouse position
+        let mouseX = canvas.width / 2;
+        let mouseY = canvas.height / 2;
+
+        // Event listeners
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+
+        // Game objects
+        class Missile {
+            constructor(x, y, target) {
+                this.x = x;
+                this.y = y;
+                this.radius = 8;
+                this.color = '#4488ff';
+                this.target = target;
+                this.speed = 3;
+                this.angle = Math.atan2(target.y - y, target.x - x);
+                this.hasHit = false;
+            }
+
+            update() {
+                if (!this.hasHit) {
+                    this.x += Math.cos(this.angle) * this.speed;
+                    this.y += Math.sin(this.angle) * this.speed;
+
+                    // Check if missile hits target
+                    const dx = this.target.x - this.x;
+                    const dy = this.target.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < this.radius + this.target.radius) {
+                        this.hasHit = true;
+                        score += 10;
+                        scoreDisplay.textContent = `Score: ${score}`;
+                    }
+
+                    // Check if missile hits obstacles
+                    for (let obstacle of obstacles) {
+                        const ox = obstacle.x;
+                        const oy = obstacle.y;
+                        const odx = ox - this.x;
+                        const ody = oy - this.y;
+                        const obstacleDistance = Math.sqrt(odx * odx + ody * ody);
+
+                        if (obstacleDistance < this.radius + obstacle.radius) {
+                            this.hasHit = true;
+                            lives--;
+                            livesDisplay.textContent = `Lives: ${lives}`;
+
+                            if (lives <= 0) {
+                                gameOver();
+                            }
+
+                            break;
+                        }
+                    }
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
+
+                // Draw trail
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(
+                    this.x - Math.cos(this.angle) * 15,
+                    this.y - Math.sin(this.angle) * 15
+                );
+                ctx.strokeStyle = 'rgba(68, 136, 255, 0.5)';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                ctx.closePath();
+            }
+        }
+
+        class Target {
+            constructor() {
+                this.radius = 20;
+                this.x = Math.random() * (canvas.width - 100) + 50;
+                this.y = Math.random() * (canvas.height - 100) + 50;
+                this.color = '#55ff55';
+                this.pulseSize = 0;
+                this.pulseDirection = 1;
+            }
+
+            update() {
+                // Pulse effect
+                this.pulseSize += 0.1 * this.pulseDirection;
+                if (this.pulseSize > 5 || this.pulseSize < 0) {
+                    this.pulseDirection *= -1;
+                }
+            }
+
+            draw() {
+                // Draw outer pulse
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius + 5 + this.pulseSize, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(85, 255, 85, 0.2)';
+                ctx.fill();
+                ctx.closePath();
+
+                // Draw target
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
+
+                // Draw inner circle
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.6, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+                ctx.closePath();
+
+                // Draw center
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.2, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
+            }
+        }
+
+        class Obstacle {
+            constructor() {
+                this.radius = Math.random() * 15 + 10;
+                this.x = Math.random() * (canvas.width - 100) + 50;
+                this.y = Math.random() * (canvas.height - 100) + 50;
+                this.color = '#ff5555';
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
+
+                // Draw warning symbol
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y - this.radius * 0.5);
+                ctx.lineTo(this.x, this.y + this.radius * 0.5);
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.closePath();
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.3, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+                ctx.closePath();
+            }
+        }
+
+        // Game functions
+        function startGame() {
+            gameRunning = true;
+            score = 0;
+            lives = 3;
+            missiles = [];
+            targets = [];
+            obstacles = [];
+
+            scoreDisplay.textContent = `Score: ${score}`;
+            livesDisplay.textContent = `Lives: ${lives}`;
+
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+
+            // Create initial obstacles
+            for (let i = 0; i < 5; i++) {
+                obstacles.push(new Obstacle());
+            }
+
+            // Create initial target
+            spawnTarget();
+
+            // Start game loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            finalScoreDisplay.textContent = `Score: ${score}`;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Spawn new missiles
+            missileSpawnTimer += deltaTime;
+            if (missileSpawnTimer > 1000) {
+                spawnMissile();
+                missileSpawnTimer = 0;
+            }
+
+            // Spawn new targets
+            targetSpawnTimer += deltaTime;
+            if (targetSpawnTimer > 5000) {
+                spawnTarget();
+                targetSpawnTimer = 0;
+            }
+
+            // Update and draw game objects
+            updateMissiles(deltaTime);
+            updateTargets(deltaTime);
+            drawObstacles();
+
+            // Draw player cursor (hidden, but helps with aiming)
+            drawPlayerCursor();
+
+            // Continue game loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        function updateMissiles(deltaTime) {
+            for (let i = missiles.length - 1; i >= 0; i--) {
+                const missile = missiles[i];
+                missile.update();
+
+                // Remove missiles that have hit targets or obstacles
+                if (missile.hasHit) {
+                    missiles.splice(i, 1);
+                }
+            }
+        }
+
+        function updateTargets(deltaTime) {
+            for (let target of targets) {
+                target.update();
+            }
+        }
+
+        function spawnMissile() {
+            // Spawn from bottom of screen
+            const x = Math.random() * canvas.width;
+            const y = canvas.height;
+
+            // Target is random existing target or create new one
+            let target = null;
+            if (targets.length > 0) {
+                target = targets[Math.floor(Math.random() * targets.length)];
+            } else {
+                target = new Target();
+                targets.push(target);
+            }
+
+            missiles.push(new Missile(x, y, target));
+        }
+
+        function spawnTarget() {
+            let validPosition = false;
+            let newTarget;
+
+            while (!validPosition) {
+                newTarget = new Target();
+
+                // Check if target is too close to obstacles
+                validPosition = true;
+                for (let obstacle of obstacles) {
+                    const dx = obstacle.x - newTarget.x;
+                    const dy = obstacle.y - newTarget.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < obstacle.radius + newTarget.radius + 20) {
+                        validPosition = false;
+                        break;
+                    }
+                }
+
+                // Check if target is too close to other targets
+                if (validPosition) {
+                    for (let target of targets) {
+                        const dx = target.x - newTarget.x;
+                        const dy = target.y - newTarget.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance < target.radius + newTarget.radius + 20) {
+                            validPosition = false;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            targets.push(newTarget);
+        }
+
+        function drawObstacles() {
+            for (let obstacle of obstacles) {
+                obstacle.draw();
+            }
+        }
+
+        function drawPlayerCursor() {
+            // Draw subtle player cursor for aiming
+            ctx.beginPath();
+            ctx.arc(mouseX, mouseY, 10, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.closePath();
+        }
+    </script>
+</body>
+</html>

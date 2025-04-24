@@ -1,0 +1,41 @@
+<svg width="400" height="300" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background clouds -->
+  <ellipse cx="200" cy="150" fill="#f0f0f0" opacity="0.5" rx="150" ry="50"/>
+  <ellipse cx="150" cy="180" fill="#f8f8f8" opacity="0.6" rx="100" ry="40"/>
+
+  <!-- Dragon body -->
+  <path d="M100,150 C120,100 180,80 250,120 S350,150 300,200 S180,220 100,150"
+        fill="#d32f2f" stroke="#b71c1c" stroke-width="2"/>
+
+  <!-- Dragon head -->
+  <ellipse cx="280" cy="130" rx="40" ry="35" fill="#d32f2f" stroke="#b71c1c" stroke-width="2"/>
+
+  <!-- Dragon eyes -->
+  <circle cx="290" cy="125" r="5" fill="#fff8dc"/>
+  <circle cx="295" cy="128" r="3" fill="#000"/>
+
+  <!-- Dragon nose -->
+  <path d="M295,130 L300,135 M295,130 L290,125" stroke="#000" stroke-width="2" fill="none"/>
+
+  <!-- Dragon wings -->
+  <path d="M150,120 C100,100 80,150 120,180 S200,200 250,150"
+        fill="#d32f2f" stroke="#b71c1c" stroke-width="2"/>
+
+  <!-- Wing details -->
+  <path d="M120,150 C100,140 80,160 110,170 S180,180 220,140"
+        fill="#d32f2f" stroke="#b71c1c" stroke-width="1.5"/>
+
+  <!-- Dragon tail -->
+  <path d="M100,150 C80,140 60,160 90,170"
+        fill="none" stroke="#b71c1c" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- Flame effect from mouth -->
+  <path d="M280,160 C290,170 295,180 290,190 S275,180 280,160"
+        fill="#ff9800" stroke="#f57c00" stroke-width="1"/>
+  <path d="M285,165 C295,175 300,185 295,195 S280,185 285,165"
+        fill="#ff9800" stroke="#f57c00" stroke-width="1"/>
+
+  <!-- Dragon spikes -->
+  <path d="M250,120 L260,110 M270,125 L280,115 M290,130 L300,120"
+        stroke="#b71c1c" stroke-width="3" fill="none"/>
+</svg>
