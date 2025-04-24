@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Missile Control Defense</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: #0a0a2a;
+            color: white;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        #score-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            color: #4de8ff;
+        }
+
+        #lives-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 24px;
+            color: #ff4d4d;
+        }
+
+        #game-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px 40px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+        }
+
+        #game-message h2 {
+            color: #4de8ff;
+            margin-bottom: 20px;
+        }
+
+        #game-message p {
+            margin-bottom: 20px;
+        }
+
+        #start-button, #restart-button {
+            background-color: #4d4dff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
+        #start-button:hover, #restart-button:hover {
+            background-color: #3a3aff;
+        }
+
+        #controls-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #aaaaaa;
+            font-size: 14px;
+        }
+
+        #level-display {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            color: #ffff4d;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="ui-container">
+            <div id="score-display">Score: 0</div>
+            <div id="lives-display">Lives: 3</div>
+            <div id="level-display">Level: 1</div>
+            <div id="controls-info">
+                Move Mouse to aim missiles<br>
+                Click to launch guided missiles
+            </div>
+            <div id="game-message">
+                <h2 id="message-title">Missile Control Defense</h2>
+                <p id="message-text">Defend against incoming enemy missiles!</p>
+                <button id="start-button">Start Game</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game variables
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score-display');
+        const livesDisplay = document.getElementById('lives-display');
+        const levelDisplay = document.getElementById('level-display');
+        const gameMessage = document.getElementById('game-message');
+        const messageTitle = document.getElementById('message-title');
+        const messageText = document.getElementById('message-text');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+
+        // Set canvas size
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Game state
+        let gameRunning = false;
+        let score = 0;
+        let lives = 3;
+        let level = 1;
+        let missiles = [];
+        let enemyMissiles = [];
+        let explosions = [];
+        let lastEnemySpawn = 0;
+        let enemySpawnInterval = 2000; // milliseconds
+        let gameSpeed = 1;
+
+        // Player missile
+        const playerMissile = {
+            x: canvas.width / 2,
+            y: canvas.height - 100,
+            width: 6,
+            height: 40,
+            speed: 10,
+            color: '#4de8ff',
+            active: true
+        };
+
+        // Mouse position tracking
+        let mouseX = canvas.width / 2;
+        let mouseY = canvas.height - 100;
+
+        // Event listeners
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (gameRunning) {
+                // Launch guided missile toward mouse position
+                launchGuidedMissile(mouseX, mouseY);
+            }
+        });
+
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+
+        // Game functions
+        function startGame() {
+            // Reset game state
+            gameRunning = true;
+            score = 0;
+            lives = 3;
+            level = 1;
+            gameSpeed = 1;
+            missiles = [];
+            enemyMissiles = [];
+            explosions = [];
+            playerMissile.active = true;
+            playerMissile.x = canvas.width / 2;
+            playerMissile.y = canvas.height - 100;
+
+            // Update displays
+            scoreDisplay.textContent = `Score: ${score}`;
+            livesDisplay.textContent = `Lives: ${lives}`;
+            levelDisplay.textContent = `Level: ${level}`;
+
+            // Hide game message
+            gameMessage.style.display = 'none';
+
+            // Start game loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        function endGame() {
+            gameRunning = false;
+            gameMessage.style.display = 'block';
+            messageTitle.textContent = 'Game Over';
+            messageText.textContent = `Final Score: ${score}`;
+            startButton.textContent = 'Play Again';
+            restartButton.style.display = 'block';
+        }
+
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+
+            // Clear canvas
+            ctx.fillStyle = '#0a0a2a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw stars in background
+            drawStars();
+
+            // Update and draw game elements
+            updatePlayerMissile();
+            updateEnemyMissiles(timestamp);
+            updateExplosions();
+
+            // Draw all elements
+            drawPlayerMissile();
+            drawEnemyMissiles();
+            drawExplosions();
+
+            // Continue game loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        function drawStars() {
+            ctx.fillStyle = 'white';
+            for (let i = 0; i < 100; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                const size = Math.random() * 2;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function updatePlayerMissile() {
+            if (playerMissile.active) {
+                // Aim toward mouse position (with some limitations)
+                const targetX = mouseX;
+                const targetY = mouseY - 20; // Offset to aim slightly below cursor
+
+                // Calculate direction
+                const dx = targetX - playerMissile.x;
+                const dy = targetY - playerMissile.y;
+                const angle = Math.atan2(dy, dx);
+
+                // Move missile
+                playerMissile.x += Math.cos(angle) * playerMissile.speed;
+                playerMissile.y += Math.sin(angle) * playerMissile.speed;
+
+                // Keep missile within canvas bounds
+                playerMissile.x = Math.max(playerMissile.width / 2, Math.min(canvas.width - playerMissile.width / 2, playerMissile.x));
+                playerMissile.y = Math.max(playerMissile.height / 2, Math.min(canvas.height - playerMissile.height / 2, playerMissile.y));
+            }
+        }
+
+        function drawPlayerMissile() {
+            if (playerMissile.active) {
+                ctx.save();
+                ctx.translate(playerMissile.x, playerMissile.y);
+
+                // Draw missile body
+                ctx.fillStyle = playerMissile.color;
+                ctx.fillRect(-playerMissile.width / 2, -playerMissile.height / 2, playerMissile.width, playerMissile.height);
+
+                // Draw missile tip
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.moveTo(-playerMissile.width / 2, -playerMissile.height / 2);
+                ctx.lineTo(0, -playerMissile.height / 2 - 10);
+                ctx.lineTo(playerMissile.width / 2, -playerMissile.height / 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        function updateEnemyMissiles(timestamp) {
+            // Spawn new enemy missiles
+            if (timestamp - lastEnemySpawn > enemySpawnInterval) {
+                spawnEnemyMissile();
+                lastEnemySpawn = timestamp;
+
+                // Gradually increase difficulty
+                enemySpawnInterval = Math.max(500, enemySpawnInterval - 50);
+                gameSpeed += 0.01;
+            }
+
+            // Update existing enemy missiles
+            for (let i = enemyMissiles.length - 1; i >= 0; i--) {
+                const missile = enemyMissiles[i];
+
+                // Move missile
+                missile.y += missile.speed * gameSpeed;
+
+                // Remove missiles that go off screen
+                if (missile.y > canvas.height + missile.height) {
+                    enemyMissiles.splice(i, 1);
+                    continue;
+                }
+
+                // Check for collision with player missile
+                if (checkCollision(missile, playerMissile)) {
+                    createExplosion(missile.x, missile.y);
+                    enemyMissiles.splice(i, 1);
+                    playerMissile.active = false;
+
+                    // After a short delay, reactivate player missile
+                    setTimeout(() => {
+                        playerMissile.active = true;
+                        playerMissile.x = canvas.width / 2;
+                        playerMissile.y = canvas.height - 100;
+                    }, 1000);
+
+                    continue;
+                }
+            }
+        }
+
+        function spawnEnemyMissile() {
+            const x = Math.random() * (canvas.width - 20) + 10;
+            const y = -20;
+            const speed = 2 + Math.random() * 2 * level;
+
+            enemyMissiles.push({
+                x: x,
+                y: y,
+                width: 6,
+                height: 30,
+                speed: speed,
+                color: '#ff4d4d'
+            });
+        }
+
+        function drawEnemyMissiles() {
+            enemyMissiles.forEach(missile => {
+                ctx.save();
+                ctx.translate(missile.x, missile.y);
+
+                // Draw missile body
+                ctx.fillStyle = missile.color;
+                ctx.fillRect(-missile.width / 2, -missile.height / 2, missile.width, missile.height);
+
+                // Draw missile tip
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.moveTo(-missile.width / 2, -missile.height / 2);
+                ctx.lineTo(0, -missile.height / 2 - 10);
+                ctx.lineTo(missile.width / 2, -missile.height / 2);
+                ctx.fill();
+
+                ctx.restore();
+            });
+        }
+
+        function updateExplosions() {
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                const explosion = explosions[i];
+
+                // Update explosion animation
+                explosion.frame++;
+
+                // Remove completed explosions
+                if (explosion.frame > explosion.maxFrames) {
+                    explosions.splice(i, 1);
+                    continue;
+                }
+            }
+        }
+
+        function drawExplosions() {
+            explosions.forEach(explosion => {
+                const alpha = 1 - (explosion.frame / explosion.maxFrames);
+                const radius = (explosion.frame / explosion.maxFrames) * 50;
+
+                ctx.save();
+                ctx.globalAlpha = alpha;
+
+                // Draw multiple circles for explosion effect
+                for (let j = 0; j < 3; j++) {
+                    const innerRadius = radius * (1 - j * 0.2);
+                    ctx.fillStyle = j === 0 ? '#ffff4d' : j === 1 ? '#ff4d4d' : '#ff8080';
+                    ctx.beginPath();
+                    ctx.arc(explosion.x, explosion.y, innerRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            });
+        }
+
+        function createExplosion(x, y) {
+            const maxFrames = 30;
+            const explosion = {
+                x: x,
+                y: y,
+                frame: 0,
+                maxFrames: maxFrames
+            };
+
+            explosions.push(explosion);
+        }
+
+        function checkCollision(rect1, rect2) {
+            return (
+                rect1.x < rect2.x + rect2.width &&
+                rect1.x + rect1.width > rect2.x &&
+                rect1.y < rect2.y + rect2.height &&
+                rect1.y + rect1.height > rect2.y
+            );
+        }
+
+        function launchGuidedMissile(targetX, targetY) {
+            // Create a guided missile object
+            const guidedMissile = {
+                x: playerMissile.x,
+                y: playerMissile.y,
+                width: 8,
+                height: 50,
+                speed: 15,
+                color: '#ffff4d',
+                targetX: targetX,
+                targetY: targetY,
+                active: true
+            };
+
+            // Add to missiles array
+            missiles.push(guidedMissile);
+        }
+
+        // Initialize game
+        function init() {
+            // Show start message
+            gameMessage.style.display = 'block';
+            messageTitle.textContent = 'Missile Control Defense';
+            messageText.textContent = 'Defend against incoming enemy missiles!';
+            startButton.textContent = 'Start Game';
+            restartButton.style.display = 'none';
+        }
+
+        // Start the game
+        init();
+    </script>
+</body>
+</html>
